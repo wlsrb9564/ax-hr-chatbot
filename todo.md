@@ -8,10 +8,10 @@
 
 ## Sprint
 
-- [ ] `main.py` — FastAPI 엔드포인트 구현
-- [ ] `agent.py` — Claude Tool Use 루프 구현
-- [ ] `tools/search_hr_docs.py` — ChromaDB 검색 연동
-- [ ] `embeddings/ingest.py` — Q&A JSON 임베딩 파이프라인
+- [x] `main.py` — FastAPI 엔드포인트 구현
+- [x] `agent.py` — Claude Tool Use 루프 구현
+- [x] `tools/search_hr_docs.py` — ChromaDB 검색 연동
+- [x] `embeddings/ingest.py` — Q&A JSON 임베딩 파이프라인
 - [x] `pyproject.toml` — 의존성 정리 (uv)
 
 ---
