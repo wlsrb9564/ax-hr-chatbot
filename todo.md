@@ -21,5 +21,5 @@
 - [ ] `submit_form` Tool 추가 — 신청서 제출 연동
 - [ ] `send_teams_notification` Tool — Teams 알림
 - [ ] pgvector 마이그레이션 — PostgreSQL 전환
-- [ ] 멀티턴 대화 지원
+- [x] 멀티턴 대화 지원
 - [ ] 웹 UI

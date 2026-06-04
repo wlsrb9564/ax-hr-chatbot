@@ -67,7 +67,9 @@ def run_agent(user_message: str, history: list[dict] | None = None) -> str:
 
             messages.append({"role": "user", "content": tool_results})
 
-        elif response.stop_reason == "end_turn":
+        else:
+            # end_turn / max_tokens / stop_sequence 모두 여기서 처리
             for block in response.content:
                 if hasattr(block, "text"):
                     return block.text
+            return ""

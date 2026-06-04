@@ -34,7 +34,7 @@
 | 역할 | 기술 | 비고 |
 |------|------|------|
 | LLM + Agent | Claude API (`claude-sonnet-4-6`) | Tool Use 내장 |
-| 임베딩 | Voyage AI (`voyage-multilingual-2`) | 한국어 지원, Anthropic 공식 파트너 |
+| 임베딩 | Voyage AI (`voyage-4-lite`) | 한국어 지원, Anthropic 공식 파트너 |
 | 벡터 DB | ChromaDB | 로컬 파일 기반, 서버 불필요 |
 | 백엔드 | FastAPI (Python) | async 지원 |
 | 데이터 | JSON 파일 (`data/qa_data.json`) | Q&A 원본 |
@@ -44,8 +44,8 @@
 ## 디렉토리 구조
 
 ```
-project/
-├── main.py                  # FastAPI 엔트리포인트
+ax-hr-chatbot/
+├── main.py                  # FastAPI 엔트리포인트 (/chat, /health)
 ├── agent.py                 # Claude Tool Use 루프
 ├── tools/
 │   └── search_hr_docs.py    # ChromaDB 검색 Tool
@@ -53,7 +53,10 @@ project/
 │   └── ingest.py            # Q&A JSON → ChromaDB 임베딩
 ├── data/
 │   └── qa_data.json         # Q&A 원본 데이터
-├── chroma_db/               # ChromaDB 저장 디렉토리 (자동 생성)
+├── tests/
+│   ├── test_agent.py        # agent Tool Use 시나리오 테스트
+│   └── test_search_hr_docs.py # 검색 품질 테스트
+├── chroma_db/               # ChromaDB 저장 디렉토리 (ingest 후 자동 생성)
 ├── pyproject.toml
 └── .env                     # ANTHROPIC_API_KEY, VOYAGE_API_KEY
 ```
@@ -91,6 +94,33 @@ uv run uvicorn main:app --reload
 
 ---
 
+## API
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/chat` | 질문 전송 (멀티턴 지원) |
+| GET | `/health` | 서버 상태 확인 |
+
+**요청 예시:**
+
+```json
+POST /chat
+{
+  "message": "정보보안 담당자가 누구인가요?",
+  "history": []
+}
+```
+
+---
+
+## 테스트
+
+```bash
+uv run pytest
+```
+
+---
+
 ## Q&A 데이터 구조
 
 파일: `data/qa_data.json`
@@ -108,7 +138,7 @@ uv run uvicorn main:app --reload
     "id": "contact_001",
     "category": "담당자",
     "question": "정보보안 담당자가 누구인가요?",
-    "answer": "정보보안 관련 문의는 개발실 플랫폼개발팀 김용인 과장에게 문의하시면 됩니다.",
+    "answer": "정보보안 관련 문의는 개발실 플랫폼개발팀 김** 과장에게 문의하시면 됩니다.",
     "keywords": ["정보보안", "보안", "담당자"]
   }
 ]
