@@ -16,8 +16,16 @@ class ChatRequest(BaseModel):
     history: list[Message] = []
 
 
+class Snippet(BaseModel):
+    id: str
+    category: str
+    question: str
+    answer: str
+
+
 class ChatResponse(BaseModel):
     answer: str
+    snippets: list[Snippet] = []
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -27,12 +35,12 @@ async def chat(request: ChatRequest):
 
     history = [{"role": m.role, "content": m.content} for m in request.history]
     try:
-        answer = run_agent(request.message, history=history)
+        result = run_agent(request.message, history=history)
     except Exception:
         raise HTTPException(status_code=500, detail="답변 생성 중 오류가 발생했습니다.")
-    if not answer:
+    if not result["answer"]:
         raise HTTPException(status_code=500, detail="답변을 생성하지 못했습니다.")
-    return ChatResponse(answer=answer)
+    return ChatResponse(answer=result["answer"], snippets=result["snippets"])
 
 
 @app.get("/health")
