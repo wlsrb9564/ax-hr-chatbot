@@ -1,8 +1,8 @@
-# 사내 HR 챗봇 — RAG + Tool Use Agent
+# 사내 문의 챗봇 — RAG + Tool Use Agent
 
 ## Project Overview
 
-사내 HR 규정 Q&A를 ChromaDB에 임베딩하고, Claude Tool Use로 필요할 때만 검색을 호출하는 HR 챗봇. POC 단계.  
+사내 규정 Q&A를 ChromaDB에 임베딩하고, Claude Tool Use로 필요할 때만 검색을 호출하는 사내 문의 챗봇. POC 단계.
 FastAPI 서버(`/chat`)를 통해 멀티턴 대화를 지원하며, 검색 근거가 없으면 답변하지 않는다.
 
 ---
@@ -12,7 +12,9 @@ FastAPI 서버(`/chat`)를 통해 멀티턴 대화를 지원하며, 검색 근�
 ```bash
 uv sync                                      # 의존성 설치
 uv run python embeddings/ingest.py           # Q&A 데이터 재임베딩
-uv run uvicorn main:app --reload             # 서버 실행 (http://localhost:8000)
+uv run uvicorn main:app --reload             # 로컬 실행 (http://localhost:8000)
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload  # 외부 접속 허용
+ngrok http 8000                              # 인터넷 외부 공개 (ngrok 설치 필요)
 uv run python tests/test_agent.py            # agent Tool Use 루프 테스트
 uv run python tests/test_search_hr_docs.py  # 검색 품질 테스트
 ```
@@ -22,7 +24,7 @@ uv run python tests/test_search_hr_docs.py  # 검색 품질 테스트
 ## Tech Stack
 
 - Python 3.11+ (uv로 관리)
-- FastAPI + Uvicorn — REST API 서버
+- FastAPI + Uvicorn — REST API 서버 + StaticFiles로 프론트엔드 통합 서빙
 - Anthropic SDK (`claude-sonnet-4-6`) — Tool Use 에이전트
 - Voyage AI (`voyage-4-lite`) — 텍스트 임베딩
 - ChromaDB (PersistentClient) — 로컬 벡터 DB
@@ -34,7 +36,7 @@ uv run python tests/test_search_hr_docs.py  # 검색 품질 테스트
 
 ```
 ax-hr-chatbot/
-├── main.py                   # FastAPI 엔트리포인트 (/chat, /health)
+├── main.py                   # FastAPI 엔트리포인트 (/chat, /health) + StaticFiles 마운트
 ├── agent.py                  # Claude Tool Use 루프
 ├── tools/
 │   └── search_hr_docs.py     # ChromaDB 검색 Tool (인터페이스 변경 금지)
@@ -42,6 +44,10 @@ ax-hr-chatbot/
 │   └── ingest.py             # Q&A JSON → ChromaDB 임베딩
 ├── data/
 │   └── qa_data.json          # Q&A 원본 데이터
+├── frontend/
+│   ├── index.html            # 챗봇 UI 진입점
+│   ├── css/style.css         # 스타일
+│   └── js/app.js             # 프론트엔드 로직 + API 연동
 ├── chroma_db/                # ChromaDB 영속 저장소 (ingest 후 생성)
 └── tests/
     ├── test_agent.py         # 멀티턴·출처·차단 시나리오 테스트
@@ -55,6 +61,8 @@ ax-hr-chatbot/
 - **Tool Use 선택 이유**: 모든 질문에 무조건 검색 X → LLM이 런타임에 판단. Tool 정의만 추가하면 기능 확장 가능
 - **임베딩 방식**: `question + " " + answer` 합쳐서 단일 청크로 저장. `category`, `id`는 metadata로 보존
 - **ChromaDB → pgvector 마이그레이션 고려**: 검색 인터페이스(`tools/search_hr_docs.py`) 변경 금지
+- **프론트엔드 서빙**: FastAPI StaticFiles로 `frontend/` 폴더를 `/` 경로에 마운트. 별도 프론트 서버 불필요
+- **출처 표시**: LLM hallucinate 방지를 위해 시스템 프롬프트 대신 `AgentResponse.snippets`로 코드가 관리
 
 ---
 
@@ -70,7 +78,6 @@ ax-hr-chatbot/
 
 - 포맷팅/린트/import 정렬은 Ruff가 처리 (수동 정렬 금지)
 - 타입 힌트 필수 (함수 인자·반환값)
-- docstring은 Google 스타일
 - 네이밍: 함수·변수 snake_case, 클래스 PascalCase, 상수 UPPER_SNAKE_CASE
 - f-string 사용 (% 포매팅, `.format()` 금지)
 

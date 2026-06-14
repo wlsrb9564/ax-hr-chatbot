@@ -1,13 +1,15 @@
-# 사내 HR 챗봇 — RAG + Tool Use Agent
+# 사내 문의 챗봇 — RAG + Tool Use Agent
 
-> 사내 규정 Q&A를 벡터 DB에 임베딩하고, Claude API Tool Use로 LLM이 필요할 때만 검색을 호출하는 HR 챗봇 POC
+> 사내 규정 Q&A를 벡터 DB에 임베딩하고, Claude API Tool Use로 LLM이 필요할 때만 검색을 호출하는 사내 문의 챗봇 POC
 
 ---
 
 ## 아키텍처
 
 ```
-[사용자 질문]
+[사용자 질문 — 웹 UI]
+     ↓
+[FastAPI POST /chat]
      ↓
 [Claude API — Tool Use 판단]
      ├── 검색 필요 → search_hr_docs(query) 호출
@@ -36,7 +38,8 @@
 | LLM + Agent | Claude API (`claude-sonnet-4-6`) | Tool Use 내장 |
 | 임베딩 | Voyage AI (`voyage-4-lite`) | 한국어 지원, Anthropic 공식 파트너 |
 | 벡터 DB | ChromaDB | 로컬 파일 기반, 서버 불필요 |
-| 백엔드 | FastAPI (Python) | async 지원 |
+| 백엔드 | FastAPI (Python) | async 지원, StaticFiles로 프론트 서빙 |
+| 프론트엔드 | Vanilla HTML/CSS/JS | 별도 프레임워크 없음 |
 | 데이터 | JSON 파일 (`data/qa_data.json`) | Q&A 원본 |
 
 ---
@@ -44,8 +47,13 @@
 ## 디렉토리 구조
 
 ```
+<<<<<<< HEAD
 ax-hr-chatbot/
 ├── main.py                  # FastAPI 엔트리포인트 (/chat, /health)
+=======
+project/
+├── main.py                  # FastAPI 엔트리포인트 + StaticFiles 마운트
+>>>>>>> 14ac1bd (feat: 프론트엔드 구현 및 백엔드 연동)
 ├── agent.py                 # Claude Tool Use 루프
 ├── tools/
 │   └── search_hr_docs.py    # ChromaDB 검색 Tool
@@ -53,10 +61,20 @@ ax-hr-chatbot/
 │   └── ingest.py            # Q&A JSON → ChromaDB 임베딩
 ├── data/
 │   └── qa_data.json         # Q&A 원본 데이터
+<<<<<<< HEAD
 ├── tests/
 │   ├── test_agent.py        # agent Tool Use 시나리오 테스트
 │   └── test_search_hr_docs.py # 검색 품질 테스트
 ├── chroma_db/               # ChromaDB 저장 디렉토리 (ingest 후 자동 생성)
+=======
+├── frontend/
+│   ├── index.html           # 챗봇 UI 진입점
+│   ├── css/
+│   │   └── style.css        # 스타일
+│   └── js/
+│       └── app.js           # 프론트엔드 로직 + API 연동
+├── chroma_db/               # ChromaDB 저장 디렉토리 (자동 생성)
+>>>>>>> 14ac1bd (feat: 프론트엔드 구현 및 백엔드 연동)
 ├── pyproject.toml
 └── .env                     # ANTHROPIC_API_KEY, VOYAGE_API_KEY
 ```
@@ -89,8 +107,22 @@ uv run python embeddings/ingest.py
 ### 4. 서버 실행
 
 ```bash
+# 로컬 접속만
 uv run uvicorn main:app --reload
+
+# 같은 네트워크 외부 접속 허용
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+브라우저에서 `http://localhost:8000` 접속 (프론트엔드 + 백엔드 통합 서빙).
+
+### 5. 인터넷 외부 공개 (선택)
+
+```bash
+ngrok http 8000
+```
+
+ngrok이 발급한 `https://xxxx.ngrok-free.app` URL로 외부에서 접속 가능.
 
 ---
 
@@ -133,6 +165,7 @@ uv run pytest
     "question": "휴일근무신청서는 언제까지 신청 가능한가요?",
     "answer": "휴일근무신청서는 근무 전날까지 신청 가능합니다.",
     "keywords": ["휴일근무", "신청서", "마감"]
+<<<<<<< HEAD
   },
   {
     "id": "contact_001",
@@ -140,11 +173,15 @@ uv run pytest
     "question": "정보보안 담당자가 누구인가요?",
     "answer": "정보보안 관련 문의는 개발실 플랫폼개발팀 김** 과장에게 문의하시면 됩니다.",
     "keywords": ["정보보안", "보안", "담당자"]
+=======
+>>>>>>> 14ac1bd (feat: 프론트엔드 구현 및 백엔드 연동)
   }
 ]
 ```
 
 임베딩 시 `question + " " + answer`를 합쳐 단일 청크로 저장. `category`, `id`는 ChromaDB metadata로 저장해 출처 표시에 활용.
+
+현재 지원 카테고리: `근태`, `담당자`, `경영비전`
 
 ---
 

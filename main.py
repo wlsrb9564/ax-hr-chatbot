@@ -1,9 +1,20 @@
+import asyncio
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agent import run_agent
 
 app = FastAPI(title="HR 챗봇 API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST", "GET"],
+    allow_headers=["Content-Type"],
+)
 
 
 class Message(BaseModel):
@@ -35,7 +46,7 @@ async def chat(request: ChatRequest):
 
     history = [{"role": m.role, "content": m.content} for m in request.history]
     try:
-        result = run_agent(request.message, history=history)
+        result = await asyncio.to_thread(run_agent, request.message, history)
     except Exception:
         raise HTTPException(status_code=500, detail="답변 생성 중 오류가 발생했습니다.")
     if not result["answer"]:
@@ -46,3 +57,6 @@ async def chat(request: ChatRequest):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

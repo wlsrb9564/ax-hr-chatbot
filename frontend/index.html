@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>시원위키 — 사내 문의 챗봇</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <button class="back-btn hidden" id="backBtn" aria-label="처음으로">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="logo-badge">시</div>
+    <span class="logo-name">시원위키</span>
+    <span class="logo-sub">사내 문의 챗봇</span>
+  </header>
+
+  <main id="main">
+    <div class="hero" id="hero">
+      <h1>무엇이든 물어보세요</h1>
+      <p>인사·규정·복지부터 내선번호까지, 사내 문의를 한 줄로 해결해 드려요.</p>
+    </div>
+
+    <div class="chat hidden" id="chat"></div>
+
+    <div class="searchwrap" id="searchwrap">
+      <div class="searchbar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="flex-shrink:0">
+          <circle cx="11" cy="11" r="7" stroke="#9AA5B8" stroke-width="2"/>
+          <path d="M20 20l-3.2-3.2" stroke="#9AA5B8" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input id="q" type="text" placeholder="궁금한 점을 입력하세요" autofocus>
+        <button class="send-btn" id="sendBtn" aria-label="질문하기">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 19V5M12 5l-6 6M12 5l6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="suggestions" id="suggestions"></div>
+  </main>
+
+  <footer id="footer">시원스쿨 경영지원실 · 사내 전용</footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
