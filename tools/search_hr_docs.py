@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -7,9 +8,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+log = logging.getLogger(__name__)
+
 CHROMA_PATH = Path(__file__).parent.parent / "chroma_db"
 COLLECTION_NAME = "hr_qa"
 EMBED_MODEL = "voyage-4-lite"
+DISTANCE_THRESHOLD = 1.0  # 이 값 이하인 문서만 출처로 표시
 
 
 def search_hr_docs(query: str, top_k: int = 3) -> list[dict]:
@@ -24,12 +28,16 @@ def search_hr_docs(query: str, top_k: int = 3) -> list[dict]:
         n_results=top_k,
     )
 
-    return [
-        {
+    items = []
+    for meta, distance in zip(results["metadatas"][0], results["distances"][0]):
+        log.info("  [검색] %s | distance=%.4f | 임계값 이하=%s",
+                 meta["id"], distance, distance <= DISTANCE_THRESHOLD)
+        items.append({
             "id": meta["id"],
             "category": meta["category"],
             "question": meta["question"],
             "answer": meta["answer"],
-        }
-        for meta in results["metadatas"][0]
-    ]
+            "distance": distance,
+        })
+
+    return items

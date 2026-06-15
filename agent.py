@@ -1,12 +1,16 @@
 import json
+import logging
 from typing import TypedDict
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from tools.search_hr_docs import search_hr_docs
+from tools.search_hr_docs import DISTANCE_THRESHOLD, search_hr_docs
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+log = logging.getLogger(__name__)
 
 client = Anthropic()
 
@@ -26,21 +30,19 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "검색할 키워드 또는 질문"
-                }
+                "query": {"type": "string", "description": "검색할 키워드 또는 질문"}
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     }
 ]
 
 # 출처 표시는 시스템 프롬프트가 아닌 코드(AgentResponse.snippets)가 담당하므로
 # 프롬프트에 인용 지시를 넣지 않는다 — LLM이 id/category를 hallucinate하는 것을 방지
-SYSTEM_PROMPT = """당신은 사내 문의 안내 챗봇입니다. 사내 규정, 근태, 담당자 연락처, 회사 정보 등 회사 내부 관련 질문에 답변합니다.
+SYSTEM_PROMPT = """당신은 시원스쿨 회사의 사내 문의 안내 챗봇입니다. 사내 규정, 근태, 담당자 연락처, 회사 정보 등 회사 내부 관련 질문에 답변합니다.
 
 규칙:
+- 표, 이모지로 답변 생성하지말고, 간결한 문장으로 답변하세요.
 - 회사 내부와 무관한 질문(날씨, 코딩, 일반 상식 등)은 search_hr_docs를 호출하지 말고 즉시 "저는 사내 문의 안내만 가능합니다. 회사 관련 질문을 입력해 주세요."라고 안내하세요.
 - 회사 내부 관련 질문은 반드시 search_hr_docs tool을 사용해 근거를 찾으세요.
 - tool 검색 결과에 근거가 있을 때만 답변하세요.
@@ -48,6 +50,7 @@ SYSTEM_PROMPT = """당신은 사내 문의 안내 챗봇입니다. 사내 규정
 
 
 def run_agent(user_message: str, history: list[dict] | None = None) -> AgentResponse:
+    log.info("▶ 질문: %s", user_message)
     messages = (history or []) + [{"role": "user", "content": user_message}]
     all_snippets: list[dict] = []
 
@@ -59,6 +62,7 @@ def run_agent(user_message: str, history: list[dict] | None = None) -> AgentResp
             tools=TOOLS,
             messages=messages,
         )
+        log.info("stop_reason: %s", response.stop_reason)
 
         if response.stop_reason == "tool_use":
             messages.append({"role": "assistant", "content": response.content})
@@ -66,19 +70,24 @@ def run_agent(user_message: str, history: list[dict] | None = None) -> AgentResp
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
+                    log.info("🔍 RAG 검색 쿼리: %s", block.input["query"])
                     results = search_hr_docs(block.input["query"])
-                    all_snippets.extend(results)
+                    log.info("검색 결과 %d건: %s", len(results), [r["id"] for r in results])
+                    # 임계값 이하 문서만 출처로 표시 (Claude 컨텍스트는 전체 사용)
+                    all_snippets.extend(r for r in results if r["distance"] <= DISTANCE_THRESHOLD)
 
                     # Claude에게는 question+answer만 전달 — id/category는 snippets로 코드가 관리
                     claude_content = [
                         {"question": r["question"], "answer": r["answer"]}
                         for r in results
                     ]
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": json.dumps(claude_content, ensure_ascii=False),
-                    })
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": json.dumps(claude_content, ensure_ascii=False),
+                        }
+                    )
 
             messages.append({"role": "user", "content": tool_results})
 
@@ -86,5 +95,7 @@ def run_agent(user_message: str, history: list[dict] | None = None) -> AgentResp
             # end_turn / max_tokens / stop_sequence 모두 여기서 처리
             for block in response.content:
                 if hasattr(block, "text"):
+                    log.info("✅ 최종 답변 (RAG 사용: %s): %s", bool(all_snippets), block.text[:80])
                     return AgentResponse(answer=block.text, snippets=all_snippets)
+            log.warning("⚠️ 답변 블록 없음")
             return AgentResponse(answer="", snippets=[])

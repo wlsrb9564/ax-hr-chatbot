@@ -20,7 +20,7 @@
      │
      └── 검색 불필요 → 바로 답변 생성
              ↓
-     [최종 답변 + 출처 반환]
+     [최종 답변 + 출처 칩 반환]
 ```
 
 ### Tool Use를 선택한 이유
@@ -38,7 +38,7 @@
 | LLM + Agent | Claude API (`claude-sonnet-4-6`) | Tool Use 내장 |
 | 임베딩 | Voyage AI (`voyage-4-lite`) | 한국어 지원, Anthropic 공식 파트너 |
 | 벡터 DB | ChromaDB | 로컬 파일 기반, 서버 불필요 |
-| 백엔드 | FastAPI (Python) | async 지원, StaticFiles로 프론트 서빙 |
+| 백엔드 | FastAPI (Python 3.11) | async 지원, StaticFiles로 프론트 서빙 |
 | 프론트엔드 | Vanilla HTML/CSS/JS | 별도 프레임워크 없음 |
 | 데이터 | JSON 파일 (`data/qa_data.json`) | Q&A 원본 |
 
@@ -47,36 +47,28 @@
 ## 디렉토리 구조
 
 ```
-<<<<<<< HEAD
 ax-hr-chatbot/
-├── main.py                  # FastAPI 엔트리포인트 (/chat, /health)
-=======
-project/
-├── main.py                  # FastAPI 엔트리포인트 + StaticFiles 마운트
->>>>>>> 14ac1bd (feat: 프론트엔드 구현 및 백엔드 연동)
-├── agent.py                 # Claude Tool Use 루프
+├── main.py                   # FastAPI 엔트리포인트 (/chat, /health) + StaticFiles 마운트
+├── agent.py                  # Claude Tool Use 루프
 ├── tools/
-│   └── search_hr_docs.py    # ChromaDB 검색 Tool
+│   └── search_hr_docs.py     # ChromaDB 검색 Tool
 ├── embeddings/
-│   └── ingest.py            # Q&A JSON → ChromaDB 임베딩
+│   └── ingest.py             # Q&A JSON → ChromaDB 임베딩
 ├── data/
-│   └── qa_data.json         # Q&A 원본 데이터
-<<<<<<< HEAD
-├── tests/
-│   ├── test_agent.py        # agent Tool Use 시나리오 테스트
-│   └── test_search_hr_docs.py # 검색 품질 테스트
-├── chroma_db/               # ChromaDB 저장 디렉토리 (ingest 후 자동 생성)
-=======
+│   └── qa_data.json          # Q&A 원본 데이터
 ├── frontend/
-│   ├── index.html           # 챗봇 UI 진입점
+│   ├── index.html            # 챗봇 UI 진입점
 │   ├── css/
-│   │   └── style.css        # 스타일
+│   │   └── style.css         # 스타일
 │   └── js/
-│       └── app.js           # 프론트엔드 로직 + API 연동
-├── chroma_db/               # ChromaDB 저장 디렉토리 (자동 생성)
->>>>>>> 14ac1bd (feat: 프론트엔드 구현 및 백엔드 연동)
+│       └── app.js            # 프론트엔드 로직 + API 연동
+├── chroma_db/                # ChromaDB 저장 디렉토리 (ingest 후 자동 생성)
+├── tests/
+│   ├── test_agent.py         # agent Tool Use 시나리오 테스트
+│   └── test_search_hr_docs.py # 검색 품질 테스트
+├── .python-version           # Python 3.11 (Railway 배포용)
 ├── pyproject.toml
-└── .env                     # ANTHROPIC_API_KEY, VOYAGE_API_KEY
+└── .env                      # ANTHROPIC_API_KEY, VOYAGE_API_KEY
 ```
 
 ---
@@ -107,22 +99,25 @@ uv run python embeddings/ingest.py
 ### 4. 서버 실행
 
 ```bash
-# 로컬 접속만
-uv run uvicorn main:app --reload
-
-# 같은 네트워크 외부 접속 허용
 uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 브라우저에서 `http://localhost:8000` 접속 (프론트엔드 + 백엔드 통합 서빙).
 
-### 5. 인터넷 외부 공개 (선택)
+### 5. 인터넷 외부 공개 (선택 — 다른 터미널에서 추가 실행)
+
+ngrok은 uvicorn을 대체하는 것이 아니라, 실행 중인 서버(8000번 포트)에 외부 접속 터널을 추가하는 방식입니다.
+4번 서버를 띄운 상태에서 **새 터미널**에서 실행:
 
 ```bash
 ngrok http 8000
 ```
 
-ngrok이 발급한 `https://xxxx.ngrok-free.app` URL로 외부에서 접속 가능.
+ngrok이 발급한 `https://xxxx.ngrok-free.app` URL로 외부 네트워크에서도 접속 가능.
+
+```
+외부 사용자 → ngrok URL (https) → ngrok → localhost:8000 → uvicorn
+```
 
 ---
 
@@ -143,13 +138,18 @@ POST /chat
 }
 ```
 
----
+**응답 예시:**
 
-## 테스트
-
-```bash
-uv run pytest
+```json
+{
+  "answer": "정보보안 관련 문의는 개발실 플랫폼개발팀 김** 과장에게 문의하시면 됩니다.",
+  "snippets": [
+    { "id": "contact_001", "category": "담당자", "question": "...", "answer": "...", "distance": 0.52 }
+  ]
+}
 ```
+
+`snippets`는 distance 임계값(1.0) 이하인 문서만 포함되며, 프론트엔드에서 출처 칩으로 렌더링됩니다.
 
 ---
 
@@ -165,16 +165,6 @@ uv run pytest
     "question": "휴일근무신청서는 언제까지 신청 가능한가요?",
     "answer": "휴일근무신청서는 근무 전날까지 신청 가능합니다.",
     "keywords": ["휴일근무", "신청서", "마감"]
-<<<<<<< HEAD
-  },
-  {
-    "id": "contact_001",
-    "category": "담당자",
-    "question": "정보보안 담당자가 누구인가요?",
-    "answer": "정보보안 관련 문의는 개발실 플랫폼개발팀 김** 과장에게 문의하시면 됩니다.",
-    "keywords": ["정보보안", "보안", "담당자"]
-=======
->>>>>>> 14ac1bd (feat: 프론트엔드 구현 및 백엔드 연동)
   }
 ]
 ```
@@ -200,6 +190,6 @@ uv run pytest
 ## 설계 원칙
 
 1. **근거 없으면 답변 안 함** — 환각 방지, system prompt에 명시
-2. **출처 표시** — 답변에 `category`, 문서 `id` 포함
+2. **출처 표시** — 답변 하단에 `category · id` 칩으로 렌더링 (AgentResponse.snippets)
 3. **Tool 추가만으로 기능 확장** — agent 루프 수정 불필요
 4. **ChromaDB → pgvector 마이그레이션 고려** — 추후 PostgreSQL 도입 시 검색 인터페이스 동일하게 유지

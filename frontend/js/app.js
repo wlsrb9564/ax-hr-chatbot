@@ -10,7 +10,7 @@ const SUGGESTIONS = [
 async function callChatbot(question, history) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
     body: JSON.stringify({
       message: question,
       history: history.map((m) => ({
@@ -21,7 +21,7 @@ async function callChatbot(question, history) {
   });
   if (!res.ok) throw new Error(`서버 오류 ${res.status}`);
   const data = await res.json();
-  return data.answer;
+  return { answer: data.answer, snippets: data.snippets || [] };
 }
 
 let messages = [];
@@ -63,7 +63,16 @@ function renderChat() {
     if (m.role === 'user') {
       html += '<div class="row user"><div class="bubble user">' + escapeHtml(m.text) + '</div></div>';
     } else {
-      html += '<div class="row bot"><div class="avatar">시</div><div class="bubble bot">' + escapeHtml(m.text) + '</div></div>';
+      let sourcesHtml = '';
+      if (m.snippets && m.snippets.length > 0) {
+        const seen = new Set();
+        const chips = m.snippets
+          .filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; })
+          .map(s => `<span class="source-chip">${escapeHtml(s.category)} · ${escapeHtml(s.id)}</span>`)
+          .join('');
+        sourcesHtml = `<div class="sources"><span class="sources-label">출처</span>${chips}</div>`;
+      }
+      html += `<div class="row bot"><div class="avatar">시</div><div class="bot-wrap"><div class="bubble bot">${escapeHtml(m.text)}</div>${sourcesHtml}</div></div>`;
     }
   });
   if (loading) {
@@ -121,12 +130,12 @@ async function submit(text) {
   renderChat();
 
   try {
-    const answer = await callChatbot(q, historySnapshot);
+    const { answer, snippets } = await callChatbot(q, historySnapshot);
     if (mySession !== sessionId) return;
-    messages.push({ role: 'bot', text: answer });
+    messages.push({ role: 'bot', text: answer, snippets });
   } catch (e) {
     if (mySession !== sessionId) return;
-    messages.push({ role: 'bot', text: '답변을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' });
+    messages.push({ role: 'bot', text: '답변을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', snippets: [] });
   } finally {
     if (mySession === sessionId) {
       loading = false;

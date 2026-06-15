@@ -49,6 +49,7 @@ ax-hr-chatbot/
 │   ├── css/style.css         # 스타일
 │   └── js/app.js             # 프론트엔드 로직 + API 연동
 ├── chroma_db/                # ChromaDB 영속 저장소 (ingest 후 생성)
+├── .python-version           # Python 3.11 고정 (Railway 배포용)
 └── tests/
     ├── test_agent.py         # 멀티턴·출처·차단 시나리오 테스트
     └── test_search_hr_docs.py # 검색 정확도·top_k 테스트
@@ -96,3 +97,11 @@ ax-hr-chatbot/
 ## 환경 변수
 
 `.env` 파일 필요: `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`
+
+---
+
+## 배포
+
+- **로컬 개발**: `uv run uvicorn main:app --reload`
+- **외부 공개 (임시)**: `ngrok http 8000` — 단일 터널로 프론트+백엔드 통합 서빙
+- **Railway 배포**: `.python-version` 파일로 Python 3.11 명시 필요. `PORT` 환경 변수는 Railway가 자동 주입
