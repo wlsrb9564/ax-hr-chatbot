@@ -7,7 +7,7 @@ const SUGGESTIONS = [
   "업무분장표",
 ];
 
-async function callChatbot(question, history) {
+async function streamChatbot(question, history, onToken, onDone, onError) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -20,8 +20,27 @@ async function callChatbot(question, history) {
     }),
   });
   if (!res.ok) throw new Error(`서버 오류 ${res.status}`);
-  const data = await res.json();
-  return { answer: data.answer, snippets: data.snippets || [] };
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop(); // 마지막 불완전한 줄은 다음 청크와 합침
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const chunk = JSON.parse(line.slice(6));
+      if (chunk.type === "token") onToken(chunk.text);
+      else if (chunk.type === "done") onDone(chunk.snippets || []);
+      else if (chunk.type === "error") onError(chunk.text);
+    }
+  }
 }
 
 let messages = [];
@@ -130,18 +149,43 @@ async function submit(text) {
   renderChat();
 
   try {
-    const { answer, snippets } = await callChatbot(q, historySnapshot);
-    if (mySession !== sessionId) return;
-    messages.push({ role: 'bot', text: answer, snippets });
+    await streamChatbot(
+      q,
+      historySnapshot,
+      (token) => {
+        if (mySession !== sessionId) return;
+        const last = messages[messages.length - 1];
+        if (last.role !== 'bot') {
+          // 첫 토큰 도착 시 타이핑 인디케이터 제거 후 빈 bot 메시지 추가
+          loading = false;
+          messages.push({ role: 'bot', text: token, snippets: [] });
+        } else {
+          last.text += token;
+        }
+        renderChat();
+      },
+      (snippets) => {
+        if (mySession !== sessionId) return;
+        const last = messages[messages.length - 1];
+        if (last.role === 'bot') last.snippets = snippets;
+        loading = false;
+        renderChat();
+        els.input.focus();
+      },
+      (errText) => {
+        if (mySession !== sessionId) return;
+        loading = false;
+        messages.push({ role: 'bot', text: errText, snippets: [] });
+        renderChat();
+        els.input.focus();
+      },
+    );
   } catch (e) {
     if (mySession !== sessionId) return;
+    loading = false;
     messages.push({ role: 'bot', text: '답변을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', snippets: [] });
-  } finally {
-    if (mySession === sessionId) {
-      loading = false;
-      renderChat();
-      els.input.focus();
-    }
+    renderChat();
+    els.input.focus();
   }
 }
 

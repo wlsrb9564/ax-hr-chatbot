@@ -99,3 +99,61 @@ def run_agent(user_message: str, history: list[dict] | None = None) -> AgentResp
                     return AgentResponse(answer=block.text, snippets=all_snippets)
             log.warning("⚠️ 답변 블록 없음")
             return AgentResponse(answer="", snippets=[])
+
+
+def stream_agent(user_message: str, history: list[dict] | None = None):
+    """tool_use 판단은 messages.create()로 처리하고, 최종 답변만 토큰 단위로 yield한다."""
+    log.info("▶ [stream] 질문: %s", user_message)
+    messages = (history or []) + [{"role": "user", "content": user_message}]
+    all_snippets: list[dict] = []
+
+    while True:
+        # tool_use 판단 단계 — 화면에 보여줄 텍스트 없으므로 스트리밍 불필요
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            tools=TOOLS,
+            messages=messages,
+        )
+        log.info("stop_reason: %s", response.stop_reason)
+
+        if response.stop_reason == "tool_use":
+            messages.append({"role": "assistant", "content": response.content})
+
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    log.info("🔍 RAG 검색 쿼리: %s", block.input["query"])
+                    results = search_hr_docs(block.input["query"])
+                    log.info("검색 결과 %d건: %s", len(results), [r["id"] for r in results])
+                    all_snippets.extend(r for r in results if r["distance"] <= DISTANCE_THRESHOLD)
+
+                    claude_content = [
+                        {"question": r["question"], "answer": r["answer"]}
+                        for r in results
+                    ]
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": json.dumps(claude_content, ensure_ascii=False),
+                        }
+                    )
+
+            messages.append({"role": "user", "content": tool_results})
+
+        else:
+            # 최종 답변 단계 — 토큰 단위로 스트리밍
+            log.info("✅ [stream] 최종 답변 스트리밍 시작 (RAG 사용: %s)", bool(all_snippets))
+            with client.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=1024,
+                system=SYSTEM_PROMPT,
+                messages=messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    yield {"type": "token", "text": text}
+
+            yield {"type": "done", "snippets": all_snippets}
+            return
