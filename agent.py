@@ -49,58 +49,6 @@ SYSTEM_PROMPT = """당신은 시원스쿨 회사의 사내 문의 안내 챗봇�
 - 근거가 없으면 "해당 내용은 담당 부서에 직접 문의해 주세요."라고 안내하세요."""
 
 
-def run_agent(user_message: str, history: list[dict] | None = None) -> AgentResponse:
-    log.info("▶ 질문: %s", user_message)
-    messages = (history or []) + [{"role": "user", "content": user_message}]
-    all_snippets: list[dict] = []
-
-    while True:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
-            messages=messages,
-        )
-        log.info("stop_reason: %s", response.stop_reason)
-
-        if response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    log.info("🔍 RAG 검색 쿼리: %s", block.input["query"])
-                    results = search_hr_docs(block.input["query"])
-                    log.info("검색 결과 %d건: %s", len(results), [r["id"] for r in results])
-                    # 임계값 이하 문서만 출처로 표시 (Claude 컨텍스트는 전체 사용)
-                    all_snippets.extend(r for r in results if r["distance"] <= DISTANCE_THRESHOLD)
-
-                    # Claude에게는 question+answer만 전달 — id/category는 snippets로 코드가 관리
-                    claude_content = [
-                        {"question": r["question"], "answer": r["answer"]}
-                        for r in results
-                    ]
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": json.dumps(claude_content, ensure_ascii=False),
-                        }
-                    )
-
-            messages.append({"role": "user", "content": tool_results})
-
-        else:
-            # end_turn / max_tokens / stop_sequence 모두 여기서 처리
-            for block in response.content:
-                if hasattr(block, "text"):
-                    log.info("✅ 최종 답변 (RAG 사용: %s): %s", bool(all_snippets), block.text[:80])
-                    return AgentResponse(answer=block.text, snippets=all_snippets)
-            log.warning("⚠️ 답변 블록 없음")
-            return AgentResponse(answer="", snippets=[])
-
-
 def stream_agent(user_message: str, history: list[dict] | None = None):
     """tool_use 판단은 messages.create()로 처리하고, 최종 답변만 토큰 단위로 yield한다."""
     log.info("▶ [stream] 질문: %s", user_message)

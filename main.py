@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from agent import run_agent, stream_agent
+from agent import stream_agent
 
 app = FastAPI(title="HR 챗봇 API")
 
